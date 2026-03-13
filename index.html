@@ -390,58 +390,61 @@ async function runScan(name, pnr) {
   const q         = encodeURIComponent(name);
   const slug      = (first+'-'+last).toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
 
-  // Build direct URLs — Ratsit uses personnummer directly in URL (real profile)
-  // Others use the most direct search URL possible
-  const pnr10 = pnr.length === 12 ? pnr.substring(2) : pnr; // strip century if 12-digit
+  // Build the most direct URL possible for each site
+  const pnr10  = pnr.length === 12 ? pnr.substring(2) : pnr;   // 10-digit (YYMMDDXXXX)
+  const pnr12  = pnr.length === 10 ? '19'+pnr : pnr;            // 12-digit (YYYYMMDDXXXX)
+  const bday6  = pnr10.substring(0,6);                           // YYMMDD  (för Mr Koll m.fl.)
+  const firstSlug = first.toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
+  const lastSlug  = last.toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
 
   const sites = [
     {
       name: 'Ratsit.se',
       url: `https://www.ratsit.se/${pnr10}`,
-      data: ['Inkomst', 'Skatteskuld', 'Förmögenhet'],
-      note: 'Direktlänk till din profil'
+      display: `ratsit.se/${pnr10}`,
+      data: ['Inkomst', 'Skatteskuld', 'Förmögenhet', 'Personnummer'],
+    },
+    {
+      name: 'Mr Koll',
+      url: `https://www.mrkoll.se/person/${firstSlug}-${lastSlug}-${bday6}/`,
+      display: `mrkoll.se/person/${firstSlug}-${lastSlug}-${bday6}/`,
+      data: ['Personnummer', 'Adress', 'Inkomst', 'Fordon'],
+    },
+    {
+      name: 'Merinfo.se',
+      url: `https://www.merinfo.se/person/${first.charAt(0).toUpperCase()+first.slice(1)}-${last.charAt(0).toUpperCase()+last.slice(1)}/${pnr10}`,
+      display: `merinfo.se/person/${firstSlug}-${lastSlug}/${pnr10}`,
+      data: ['Namn', 'Adress', 'Inkomst', 'Ålder'],
     },
     {
       name: 'Eniro.se',
       url: `https://www.eniro.se/hitta/${slug}/`,
+      display: `eniro.se/hitta/${slug}/`,
       data: ['Namn & adress', 'Telefonnummer'],
-      note: 'Sök på ditt namn'
     },
     {
       name: 'Hitta.se',
       url: `https://www.hitta.se/sok?vad=${q}&typ=person`,
+      display: `hitta.se/sok?vad=${encodeURIComponent(name)}`,
       data: ['Namn & adress', 'Grannar'],
-      note: 'Sök på ditt namn'
-    },
-    {
-      name: 'Mr Koll',
-      url: `https://www.mrkoll.se/person/?fnamn=${encodeURIComponent(first)}&enamn=${encodeURIComponent(last)}`,
-      data: ['Personnummer', 'Adress', 'Inkomst'],
-      note: 'Sök på ditt namn'
-    },
-    {
-      name: 'Merinfo.se',
-      url: `https://www.merinfo.se/search?who=${q}&type=1`,
-      data: ['Namn', 'Adress', 'Inkomst'],
-      note: 'Sök på ditt namn'
     },
     {
       name: 'Birthday.se',
       url: `https://www.birthday.se/sok/?q=${q}`,
+      display: `birthday.se/sok/?q=${encodeURIComponent(name)}`,
       data: ['Namn', 'Födelsedag', 'Ålder'],
-      note: 'Sök på ditt namn'
     },
     {
       name: 'Upplysning.se',
       url: `https://www.upplysning.se/Person/Sok/?q=${q}`,
+      display: `upplysning.se/Person/Sok/?q=${encodeURIComponent(name)}`,
       data: ['Inkomst', 'Adress', 'Skulder'],
-      note: 'Sök på ditt namn'
     },
     {
       name: 'Vem bor här',
       url: `https://www.vembodhar.se/search?q=${q}`,
+      display: `vembodhar.se/search?q=${encodeURIComponent(name)}`,
       data: ['Adress', 'Grannar', 'Hyresvärd'],
-      note: 'Sök på ditt namn'
     },
   ];
 
@@ -469,18 +472,21 @@ function showResults(name, sites) {
   const list = document.getElementById('results-list');
   list.innerHTML = sites.map(r => `
     <div class="result-card fade-in" style="margin-bottom:12px;">
-      <div class="result-card-header" style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div class="result-card-title">Publicerad på</div>
-          <div class="result-site-name">${r.name}</div>
+      <div class="result-card-header">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div>
+            <div class="result-card-title">Din profil på</div>
+            <div class="result-site-name">${r.name}</div>
+            <div style="font-size:0.72rem; color:var(--muted); margin-top:4px; font-family:monospace; word-break:break-all;">${r.display}</div>
+          </div>
+          <a href="${r.url}" target="_blank" rel="noopener" style="flex-shrink:0; background:rgba(248,113,113,0.1); color:#F87171; border:1px solid rgba(248,113,113,0.25); padding:9px 16px; border-radius:8px; font-size:0.82rem; font-weight:600; white-space:nowrap; text-decoration:none;">
+            Öppna →
+          </a>
         </div>
-        <a href="${r.url}" target="_blank" rel="noopener" style="background:rgba(248,113,113,0.1); color:#F87171; border:1px solid rgba(248,113,113,0.25); padding:8px 16px; border-radius:8px; font-size:0.82rem; font-weight:600; white-space:nowrap;">
-          Se min info →
-        </a>
       </div>
       ${r.data.map(d => `
         <div class="result-row">
-          <span class="result-data-type">⚠️ ${d} är synligt</span>
+          <span class="result-data-type">⚠️ ${d} är offentligt</span>
         </div>
       `).join('')}
     </div>
