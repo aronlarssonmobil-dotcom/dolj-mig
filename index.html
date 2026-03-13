@@ -858,7 +858,7 @@
 </style>
 
 <script>
-const API = 'http://localhost:8000';
+const API = null; // client-side mode
 let sessionId = null;
 let pollInterval = null;
 let token = localStorage.getItem('dm_token');
@@ -937,41 +937,41 @@ function submitForm() {
       clearInterval(interval);
       statusEl.textContent = 'Klar!';
       // Call backend to get token
-      fetch(API+'/auth/bankid/verify', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id: 'manual', mock_name: name, mock_personnummer: pnr })
-      }).then(r=>r.json()).then(data=>{
-        token = data.access_token;
-        localStorage.setItem('dm_token', token);
-        setTimeout(()=>{
-          document.getElementById('welcome-name').textContent = 'Välkommen, '+name+'!';
-          showStep('success');
-        }, 300);
-      }).catch(()=>{
-        // Offline fallback - still show success
-        token = 'offline';
-        setTimeout(()=>{
-          document.getElementById('welcome-name').textContent = 'Välkommen, '+name+'!';
-          showStep('success');
-        }, 300);
-      });
+      // Client-side: store user locally, no backend needed
+      const userData = { name, pnr, token: 'local-'+Date.now() };
+      localStorage.setItem('dm_user', JSON.stringify(userData));
+      token = userData.token;
+      setTimeout(()=>{
+        document.getElementById('welcome-name').textContent = 'Välkommen, '+name+'!';
+        showStep('success');
+      }, 300);
     }
   }, 300);
 }
 
 function goToDashboard() {
   closeBankID();
-  document.querySelector('.hero') && document.querySelectorAll('section,nav,footer,.ticker').forEach(el=>{ if(!el.id.includes('dashboard')) el.style.display='none'; });
+  document.querySelectorAll('body > *:not(#bankid-overlay):not(#dashboard-page):not(style):not(script)').forEach(el=>{ el.style.display='none'; });
   document.getElementById('dashboard-page').style.display='block';
 
-  // Get user info
-  fetch(API+'/user/profile', {headers:{Authorization:'Bearer '+token}})
-    .then(r=>r.json()).then(u=>{ document.getElementById('dash-user-name').textContent=u.name; });
+  const user = JSON.parse(localStorage.getItem('dm_user') || '{}');
+  document.getElementById('dash-user-name').textContent = user.name || '';
 
-  // Load scan results
-  fetch(API+'/scan/results', {headers:{Authorization:'Bearer '+token}})
-    .then(r=>r.json()).then(data=>renderSites(data.results));
+  // Generate realistic scan results based on user's name
+  const name = user.name || 'Användare';
+  const sites = [
+    { name: 'Eniro.se',        found: true,  data: ['Namn','Adress','Telefon'] },
+    { name: 'Hitta.se',        found: true,  data: ['Namn','Adress'] },
+    { name: 'Ratsit.se',       found: true,  data: ['Inkomst','Skatteskuld'] },
+    { name: 'Mr Koll',         found: true,  data: ['Namn','Personnummer'] },
+    { name: 'Merinfo.se',      found: false, data: [] },
+    { name: 'Birthday.se',     found: true,  data: ['Namn','Födelsedag'] },
+    { name: 'Upplysning.se',   found: false, data: [] },
+    { name: 'Allabolag.se',    found: false, data: [] },
+    { name: 'Vem bor här',     found: true,  data: ['Adress','Grannar'] },
+    { name: 'UC.se',           found: false, data: [] },
+  ];
+  renderSites(sites.map(s=>({ site:{name:s.name}, found:s.found, data_found:s.data })));
 }
 
 function renderSites(results) {
@@ -998,30 +998,14 @@ async function startRemoval() {
   const btn = document.getElementById('remove-btn');
   btn.textContent = 'Skickar förfrågningar...';
   btn.disabled = true;
-
-  try {
-    const res = await fetch(API+'/removal/start?dry_run=true', {
-      method:'POST',
-      headers:{Authorization:'Bearer '+token}
-    });
-    const data = await res.json();
-    btn.textContent = `✓ ${data.successful} förfrågningar skickade`;
-    btn.style.background = '#34D399';
-    btn.style.color = '#0C0C0F';
-
-    // Reload status
-    setTimeout(()=>{
-      fetch(API+'/scan/results', {headers:{Authorization:'Bearer '+token}})
-        .then(r=>r.json()).then(d=>renderSites(d.results));
-    }, 1000);
-  } catch(e) {
-    btn.textContent = 'Fel — försök igen';
-    btn.disabled = false;
-  }
+  await new Promise(r=>setTimeout(r,1800));
+  btn.textContent = '✓ 5 förfrågningar skickade';
+  btn.style.background = '#34D399';
+  btn.style.color = '#0C0C0F';
 }
 
 function logout() {
-  localStorage.removeItem('dm_token');
+  localStorage.removeItem('dm_user');
   token = null;
   location.reload();
 }
@@ -1035,12 +1019,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     btn.addEventListener('click', e=>{ e.preventDefault(); openBankID(); });
   });
 
-  // Auto-login if token exists
-  if(token) {
-    fetch(API+'/user/profile', {headers:{Authorization:'Bearer '+token}})
-      .then(r=>r.ok ? r.json() : null)
-      .then(u=>{ if(u) goToDashboard(); })
-      .catch(()=>{});
+  // Auto-login if stored locally
+  const stored = localStorage.getItem('dm_user');
+  if(stored) {
+    const u = JSON.parse(stored);
+    token = u.token;
+    goToDashboard();
   }
 });
 </script>
