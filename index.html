@@ -390,137 +390,97 @@ async function runScan(name, pnr) {
   const q         = encodeURIComponent(name);
   const slug      = (first+'-'+last).toLowerCase().replace(/[åä]/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
 
-  // Sites with their search URLs and direct-link builders
+  // Build direct URLs — Ratsit uses personnummer directly in URL (real profile)
+  // Others use the most direct search URL possible
+  const pnr10 = pnr.length === 12 ? pnr.substring(2) : pnr; // strip century if 12-digit
+
   const sites = [
     {
-      id: 'eniro',
-      name: 'Eniro.se',
-      searchUrl: `https://www.eniro.se/hitta/${slug}/`,
-      directUrl: `https://www.eniro.se/hitta/${slug}/`,
-      data: ['Namn & adress', 'Telefonnummer'],
-      extract: html => {
-        const m = html && html.match(/href="(\/hitta\/[^"]+\/\d+[^"]*)"/);
-        return m ? 'https://www.eniro.se'+m[1] : null;
-      }
-    },
-    {
-      id: 'hitta',
-      name: 'Hitta.se',
-      searchUrl: `https://www.hitta.se/sok?vad=${q}&typ=person`,
-      directUrl: `https://www.hitta.se/sok?vad=${q}&typ=person`,
-      data: ['Namn & adress', 'Grannar'],
-      extract: html => {
-        const m = html && html.match(/href="(\/[^"]*\/kontakt\/[^"]+)"/);
-        return m ? 'https://www.hitta.se'+m[1] : null;
-      }
-    },
-    {
-      id: 'ratsit',
       name: 'Ratsit.se',
-      searchUrl: `https://www.ratsit.se/sok/person?who=${q}`,
-      directUrl: pnr.length >= 10 ? `https://www.ratsit.se/${pnr.substring(2)}` : `https://www.ratsit.se/sok/person?who=${q}`,
-      data: ['Inkomst', 'Skatteskuld', 'Personnummer'],
-      extract: () => pnr.length >= 10 ? `https://www.ratsit.se/${pnr.substring(2)}` : null
+      url: `https://www.ratsit.se/${pnr10}`,
+      data: ['Inkomst', 'Skatteskuld', 'Förmögenhet'],
+      note: 'Direktlänk till din profil'
     },
     {
-      id: 'mrkoll',
+      name: 'Eniro.se',
+      url: `https://www.eniro.se/hitta/${slug}/`,
+      data: ['Namn & adress', 'Telefonnummer'],
+      note: 'Sök på ditt namn'
+    },
+    {
+      name: 'Hitta.se',
+      url: `https://www.hitta.se/sok?vad=${q}&typ=person`,
+      data: ['Namn & adress', 'Grannar'],
+      note: 'Sök på ditt namn'
+    },
+    {
       name: 'Mr Koll',
-      searchUrl: `https://www.mrkoll.se/person/?fnamn=${encodeURIComponent(first)}&enamn=${encodeURIComponent(last)}`,
-      directUrl: `https://www.mrkoll.se/person/?fnamn=${encodeURIComponent(first)}&enamn=${encodeURIComponent(last)}`,
-      data: ['Namn', 'Personnummer', 'Adress'],
-      extract: html => {
-        const m = html && html.match(/href="(\/person\/[a-z0-9\-]+\/)"/i);
-        return m ? 'https://www.mrkoll.se'+m[1] : null;
-      }
+      url: `https://www.mrkoll.se/person/?fnamn=${encodeURIComponent(first)}&enamn=${encodeURIComponent(last)}`,
+      data: ['Personnummer', 'Adress', 'Inkomst'],
+      note: 'Sök på ditt namn'
     },
     {
-      id: 'merinfo',
       name: 'Merinfo.se',
-      searchUrl: `https://www.merinfo.se/search?who=${q}&type=1`,
-      directUrl: `https://www.merinfo.se/search?who=${q}&type=1`,
+      url: `https://www.merinfo.se/search?who=${q}&type=1`,
       data: ['Namn', 'Adress', 'Inkomst'],
-      extract: html => {
-        const m = html && html.match(/href="(\/person\/[^"]+)"/);
-        return m ? 'https://www.merinfo.se'+m[1] : null;
-      }
+      note: 'Sök på ditt namn'
     },
     {
-      id: 'birthday',
       name: 'Birthday.se',
-      searchUrl: `https://www.birthday.se/sok/?q=${q}`,
-      directUrl: `https://www.birthday.se/sok/?q=${q}`,
-      data: ['Namn', 'Födelsedag'],
-      extract: null
+      url: `https://www.birthday.se/sok/?q=${q}`,
+      data: ['Namn', 'Födelsedag', 'Ålder'],
+      note: 'Sök på ditt namn'
     },
     {
-      id: 'upplysning',
       name: 'Upplysning.se',
-      searchUrl: `https://www.upplysning.se/Person/Sok/?q=${q}`,
-      directUrl: `https://www.upplysning.se/Person/Sok/?q=${q}`,
-      data: ['Namn', 'Adress', 'Inkomst'],
-      extract: null
+      url: `https://www.upplysning.se/Person/Sok/?q=${q}`,
+      data: ['Inkomst', 'Adress', 'Skulder'],
+      note: 'Sök på ditt namn'
     },
     {
-      id: 'vembodhar',
       name: 'Vem bor här',
-      searchUrl: `https://www.vembodhar.se/search?q=${q}`,
-      directUrl: `https://www.vembodhar.se/search?q=${q}`,
-      data: ['Adress', 'Grannar'],
-      extract: null
+      url: `https://www.vembodhar.se/search?q=${q}`,
+      data: ['Adress', 'Grannar', 'Hyresvärd'],
+      note: 'Sök på ditt namn'
     },
   ];
 
-  const progressBar  = document.getElementById('scan-progress');
-  const siteLabel    = document.getElementById('scan-site-label');
-  const statusText   = document.getElementById('scan-status-text');
-
-  const results = [];
+  const progressBar = document.getElementById('scan-progress');
+  const siteLabel   = document.getElementById('scan-site-label');
+  const statusText  = document.getElementById('scan-status-text');
 
   for(let i=0; i<sites.length; i++) {
-    const site = sites[i];
-    siteLabel.textContent  = `Söker på ${site.name}...`;
-    statusText.textContent = `${i+1} av ${sites.length} sajter klara`;
+    siteLabel.textContent  = `Söker på ${sites[i].name}...`;
+    statusText.textContent = `${i+1} av ${sites.length} sajter`;
     progressBar.style.width = Math.round(((i+1)/sites.length)*100)+'%';
-
-    let directLink = site.directUrl;
-
-    // Try to extract a more direct link via CORS proxy
-    if(site.extract) {
-      try {
-        const r = await fetch(PROXY + encodeURIComponent(site.searchUrl), {signal: AbortSignal.timeout(5000)});
-        if(r.ok) {
-          const html = await r.text();
-          const extracted = site.extract(html);
-          if(extracted) directLink = extracted;
-        }
-      } catch(e) { /* use fallback */ }
-    }
-
-    results.push({ site: site.name, url: directLink, data: site.data });
-    await new Promise(r=>setTimeout(r,200)); // small delay so progress is visible
+    await new Promise(r=>setTimeout(r,300));
   }
 
-  showResults(name, results);
+  showResults(name, sites);
 }
 
-function showResults(name, results) {
+function showResults(name, sites) {
   document.getElementById('scan-loading').style.display = 'none';
   document.getElementById('scan-results').style.display = 'block';
 
-  document.getElementById('results-headline').textContent = `${name} hittades på ${results.length} sajter`;
-  document.getElementById('results-sub').textContent = 'Klicka på en sajt för att se din information direkt.';
+  document.getElementById('results-headline').textContent = `${name} finns på ${sites.length} sajter`;
+  document.getElementById('results-sub').textContent = 'Klicka på varje sajt för att se exakt vad som visas om dig.';
 
   const list = document.getElementById('results-list');
-  list.innerHTML = results.map(r => `
+  list.innerHTML = sites.map(r => `
     <div class="result-card fade-in" style="margin-bottom:12px;">
-      <div class="result-card-header">
-        <div class="result-card-title">Hittad på</div>
-        <div class="result-site-name">${r.site}</div>
+      <div class="result-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div class="result-card-title">Publicerad på</div>
+          <div class="result-site-name">${r.name}</div>
+        </div>
+        <a href="${r.url}" target="_blank" rel="noopener" style="background:rgba(248,113,113,0.1); color:#F87171; border:1px solid rgba(248,113,113,0.25); padding:8px 16px; border-radius:8px; font-size:0.82rem; font-weight:600; white-space:nowrap;">
+          Se min info →
+        </a>
       </div>
       ${r.data.map(d => `
         <div class="result-row">
-          <span class="result-data-type">📍 ${d}</span>
-          <a class="result-link" href="${r.url}" target="_blank" rel="noopener">Se min info →</a>
+          <span class="result-data-type">⚠️ ${d} är synligt</span>
         </div>
       `).join('')}
     </div>
