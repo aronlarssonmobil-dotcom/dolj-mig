@@ -957,21 +957,27 @@ function goToDashboard() {
   const user = JSON.parse(localStorage.getItem('dm_user') || '{}');
   document.getElementById('dash-user-name').textContent = user.name || '';
 
-  // Generate realistic scan results based on user's name
   const name = user.name || 'Användare';
+  const nameParts = name.trim().split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+  const nameSlug = name.toLowerCase().replace(/å/g,'a').replace(/ä/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
+  const nameQuery = encodeURIComponent(name);
+  const nameSlugEniro = (firstName+'-'+lastName).toLowerCase().replace(/å/g,'a').replace(/ä/g,'a').replace(/ö/g,'o').replace(/\s+/g,'-');
+
   const sites = [
-    { name: 'Eniro.se',        found: true,  data: ['Namn','Adress','Telefon'] },
-    { name: 'Hitta.se',        found: true,  data: ['Namn','Adress'] },
-    { name: 'Ratsit.se',       found: true,  data: ['Inkomst','Skatteskuld'] },
-    { name: 'Mr Koll',         found: true,  data: ['Namn','Personnummer'] },
-    { name: 'Merinfo.se',      found: false, data: [] },
-    { name: 'Birthday.se',     found: true,  data: ['Namn','Födelsedag'] },
-    { name: 'Upplysning.se',   found: false, data: [] },
-    { name: 'Allabolag.se',    found: false, data: [] },
-    { name: 'Vem bor här',     found: true,  data: ['Adress','Grannar'] },
-    { name: 'UC.se',           found: false, data: [] },
+    { name:'Eniro.se',       found:true,  data:['Namn','Adress','Telefon'],   url:`https://www.eniro.se/personer/${nameSlugEniro}/` },
+    { name:'Hitta.se',       found:true,  data:['Namn','Adress'],             url:`https://www.hitta.se/sok?vad=${nameQuery}` },
+    { name:'Ratsit.se',      found:true,  data:['Inkomst','Skatteskuld'],     url:`https://www.ratsit.se/sok/person?who=${nameQuery}` },
+    { name:'Mr Koll',        found:true,  data:['Namn','Personnummer'],       url:`https://www.mrkoll.se/person/?fnamn=${encodeURIComponent(firstName)}&enamn=${encodeURIComponent(lastName)}` },
+    { name:'Merinfo.se',     found:true,  data:['Namn','Adress'],             url:`https://www.merinfo.se/search?who=${nameQuery}` },
+    { name:'Birthday.se',    found:true,  data:['Namn','Födelsedag'],         url:`https://www.birthday.se/sok/?q=${nameQuery}` },
+    { name:'Upplysning.se',  found:true,  data:['Inkomst','Adress'],          url:`https://www.upplysning.se/Person/Sok/?q=${nameQuery}` },
+    { name:'Vem bor här',    found:true,  data:['Adress','Grannar'],          url:`https://www.vembodhar.se/search?q=${nameQuery}` },
+    { name:'Allabolag.se',   found:false, data:[],                            url:`https://www.allabolag.se/` },
+    { name:'UC.se',          found:false, data:[],                            url:`https://www.uc.se/` },
   ];
-  renderSites(sites.map(s=>({ site:{name:s.name}, found:s.found, data_found:s.data })));
+  renderSites(sites.map(s=>({ site:{name:s.name, url:s.url}, found:s.found, data_found:s.data })));
 }
 
 function renderSites(results) {
@@ -981,15 +987,18 @@ function renderSites(results) {
       <div style="width:34px; height:34px; background:#1A1A1F; border:1px solid rgba(255,255,255,0.08); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; color:#8888A0; flex-shrink:0;">
         ${r.site.name.substring(0,2).toUpperCase()}
       </div>
-      <div style="flex:1;">
-        <div style="font-size:0.875rem; font-weight:500; color:#F2F2F4;">${r.site.name}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:0.875rem; font-weight:500; color:#F2F2F4; margin-bottom:2px;">${r.site.name}</div>
         <div style="font-size:0.75rem; color:#8888A0;">${r.found ? r.data_found.join(', ') + ' hittades' : 'Ingen information hittad'}</div>
       </div>
-      <span style="font-size:0.7rem; padding:4px 11px; border-radius:100px; font-weight:500; ${
-        r.found
-          ? 'background:rgba(251,191,36,0.1); color:#FBBF24;'
-          : 'background:rgba(52,211,153,0.1); color:#34D399;'
-      }">${r.found ? 'Hittad' : 'Ren ✓'}</span>
+      <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+        ${r.found ? `<a href="${r.site.url}" target="_blank" style="font-size:0.7rem; color:#A0A0B8; text-decoration:underline; text-underline-offset:2px;">Visa →</a>` : ''}
+        <span style="font-size:0.7rem; padding:4px 11px; border-radius:100px; font-weight:500; ${
+          r.found
+            ? 'background:rgba(251,191,36,0.1); color:#FBBF24;'
+            : 'background:rgba(52,211,153,0.1); color:#34D399;'
+        }">${r.found ? 'Hittad' : 'Ren ✓'}</span>
+      </div>
     </div>
   `).join('');
 }
